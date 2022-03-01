@@ -1,0 +1,113 @@
+---
+title: "Practical Machine-Learning"
+author: "Bellemin Ronan"
+date: "2/25/2022"
+output: 
+  html_document:
+    keep_md: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Assignement project: Week 4
+
+## Setup
+```{r setup, echo=TRUE, warning=FALSE, message=FALSE}
+library(readr)
+library(dplyr)
+library(caret)
+library(corrplot)
+
+training_set <- read_csv("pml-training.csv")
+test_set <- read_csv("pml-testing.csv")
+
+# removing useless columns for our ML models
+training_set = training_set %>% select(-c(1:7))
+test_set = test_set %>% select(-c(1:7))
+```
+
+
+## Data Pre-Processing
+We check our outcome variable
+```{r pre-process, echo=TRUE}
+table(training_set$classe)
+```
+
+We convert 'classe' as factor
+```{r, echo=TRUE}
+# converting 'classe' as factor
+training_set$classe <- as.factor(training_set$classe)
+```
+
+Dealing with NAs by removing columns that have more than 90% of NAs among the observations
+```{r, echo=TRUE}
+# training set
+na_threshold <- nrow(training_set)/100*90
+handle_na <- colSums(is.na(training_set)) < na_threshold
+clean_training_set <- training_set[,handle_na]
+rm(training_set)
+
+# test set
+na_threshold <- nrow(test_set)/100*90
+handle_na <- colSums(is.na(test_set)) < na_threshold
+clean_test_set <- test_set[,handle_na]
+rm(test_set)
+```
+
+
+## Exploratory Analysis
+We create a correlation plot to see correlations between our variables.
+```{r}
+#palette
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corr_matrix = cor(select(clean_training_set, c(1:52)), use = "complete.obs")
+corrplot(corr_matrix, method = 'color', 
+                  tl.col = "black", 
+                  tl.cex = 0.7, 
+                  col=col(10), type="upper")    
+```
+
+
+## Splitting Data (Cross-Validation)
+We split our training data into a test set (40%) and a training set (60%).
+```{r}
+set.seed(158)
+
+inTrainIndex <- createDataPartition(clean_training_set$classe, p=0.6, list = F)
+
+training_training_set <- clean_training_set[inTrainIndex,]
+
+training_test_set <- clean_training_set[-inTrainIndex,]
+```
+
+
+## Regression/Decision Trees Model
+We create a decision trees model and check the accuracy of this model.
+```{r}
+rpart_model_training <- train(classe ~., method='rpart', data=training_training_set)
+
+rpart_model_predict <- predict(rpart_model_training, training_test_set)
+
+confusionMatrix(training_test_set$classe, rpart_model_predict)
+```
+
+
+## Random Forest Model
+We create a random forest model and check the accuracy of this model.
+```{r}
+rf_model_training <- train(classe ~., method='ranger', data=training_training_set)
+
+rf_model_predict <- predict(rf_model_training, training_test_set)
+confusionMatrix(training_test_set$classe, rf_model_predict)
+```
+
+
+## Conclusion
+We performed two models above. A Decision Trees Model with an accuracy of 49.58% and a Random Forest Model with an accuracy of 99.57%. The Random Forest Model is way better than the Decision Trees Model. Therefore, we chose the RF model to predict the manner in which the 20 different test cases did the exercise.
+
+
+## Prediction in the Test Set
+```{r}
+rf_model_final_prediction <- predict(rf_model_training, clean_test_set)
+rf_model_final_prediction
+```
